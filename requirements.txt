@@ -1,0 +1,14 @@
+# Core data handling and neural network development
+numpy
+pandas
+torch
+scikit-learn
+
+# Exploration and visualization
+jupyterlab
+ipykernel
+matplotlib
+seaborn
+
+# Progress reporting
+tqdm
