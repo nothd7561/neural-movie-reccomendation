@@ -17,13 +17,15 @@ def split_data(ratings: pd.DataFrame, train_ratio: float = 0.7, val_ratio: float
     #create empty lists to hold our train, validation, and test dataframes
 
     for user_id, user_ratings in ratings.groupby('user_id'):
+        #the groupby function creates a tuple with user_id, and the dataframe with all that user's ratings
+
         #sort each user interaction from earliset to latest
         user_ratings = user_ratings.sort_values(
             ['timestamp', 'movie_id'] #two user ratings can have the same timestamp, so we also sort by movie id
         )
 
         n = len(user_ratings)
-        #the number of ratings for eah user
+        #the number of ratings for eah user (number of rows in their unique dataframe)
 
         train_end = int(n * train_ratio) 
         val_end = int(n * (train_ratio + val_ratio))
@@ -42,4 +44,8 @@ def split_data(ratings: pd.DataFrame, train_ratio: float = 0.7, val_ratio: float
 
 train_df, val_df, test_df = split_data(ratings)
 
-print(train_df.head(), val_df.head(), test_df.head())
+#total = len(ratings)
+
+#print(f"Train: {len(train_df):,} ({len(train_df)/total:.2%})")
+#print(f"Validation: {len(val_df):,} ({len(val_df)/total:.2%})")
+#print(f"Test: {len(test_df):,} ({len(test_df)/total:.2%})")
