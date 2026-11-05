@@ -4,11 +4,15 @@ from pathlib import Path
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-file_dir = Path(__file__).resolve().parents[1]
+project_root = Path(__file__).resolve().parents[1]
 #locate the project root relative to this script
 
-db_path = file_dir / 'data' / 'raw' / 'movie_data'
-#construct the directory containing the raw MovieLens files
+db_path = (
+    project_root / 'data' / 'raw' / 'ratings.dat')
+    #construct the directory containing the raw MovieLens files
+
+PROCESSED_DATA_PATH = (
+    project_root / 'data' / 'processed' / 'ratings_processed.csv')
 
 ratings = pd.read_csv(db_path / 'ratings.dat',
                       sep='::',
@@ -50,8 +54,12 @@ ratings = ratings.sort_values(
 ).reset_index(drop=True)
 #sort our dataframe by user_id and timestamp, then reset the index to be sequential again
 
-print(ratings.head())
+#print(ratings.duplicated(subset=['user_id', 'movie_id']).sum())
+#print(ratings['rating'].isna().sum())
+#print(len(ratings[ratings['rating'] > 5]))
+#print(len(ratings[ratings['rating'] < 0]))
 
-training_data = ratings.iloc[0:71]
-validation_data = ratings.iloc[71:86]
-test_data = ratings.iloc[86:100]
+save_path = project_root / 'data' / 'processed' / 'movie_data'
+save_path.mkdir(parents=True, exist_ok=True)
+
+ratings.to_csv(save_path / 'ratings_processed.csv', index=False)
