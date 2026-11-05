@@ -47,3 +47,33 @@ Finally, I started examining the actual ratings from 1 to 5. I decided a bar cha
 Overall, today was mostly about EDA and understanding the characteristics of the dataset before training anything. The biggest takeaway was that recommendation data has two important sources of imbalance: how active users are and how popular movies are. Both could affect the quality of our recommendations, especially for users and movies with limited interaction histories.
 
 Next session, I'll finish analyzing the rating distribution, calculate the percentage of positive interactions (ratings of 4 or 5), and start preparing the data for our recommendation models.
+
+# November 5, 2026 — Preprocessing and Chronological Splitting
+
+Today I continued working on the MovieLens recommendation system, mainly transitioning from EDA into the actual preprocessing pipeline. I wanted to make the project reproducible from the start instead of having to go back later and reorganize everything, which was something I ran into with my soccer predictor.
+
+I started by calculating the percentage of positive ratings in the dataset. I wasn't sure how to do this in pandas, but learned that Boolean expressions can be averaged because `True` and `False` correspond to 1 and 0. Around 61.4% of the observed ratings were positive, using our threshold of 4 stars or higher. This doesn't mean users would enjoy 61.4% of all movies, since people choose which movies they watch and rate.
+
+I then worked on creating the `is_positive` column. My initial approach used a for loop with an if statement, but I accidentally assigned values to the entire column on every iteration instead of individual rows. I learned how to fix this using `.loc[]`, as well as how to build a list of labels with a loop. Ultimately, vectorization with `.astype(int)` was simpler and more efficient.
+
+After that, I started preparing the dataset for chronological splitting. I initially thought we'd need to extract the hours and seconds from timestamps to sort them correctly, but realized Unix timestamps already represent the complete time as seconds since January 1, 1970. We can sort them directly using `sort_values()`.
+
+We also went over `.iloc[]`. I made an off-by-one mistake when splitting 100 interactions into training, validation, and testing sets. The important thing I learned was that Python includes the starting position but excludes the ending position when slicing.
+
+I suggested saving the processed dataset before continuing, since I didn't want our preprocessing work to depend on manually rerunning notebook cells. We checked for duplicate user–movie interactions, missing values, and ratings outside the valid 1–5 range. All of those checks passed, so there wasn't any cleaning needed based on those issues.
+
+I then created `data_loader.py` with reusable functions for loading and saving the ratings. The loader validates the dataset, converts the timestamps, creates binary labels, and sorts the interactions. I also made the positive-rating threshold configurable instead of hardcoding it. One mistake I made was initially pointing the CSV save path to a folder rather than a filename, which I corrected.
+
+We briefly discussed reproducibility as well. I initially figured that because MovieLens 1M is a fixed dataset, running the same code later should produce identical results. I learned that software dependencies and random operations during model training can also affect reproducibility. We'll need to record our library versions and control random seeds once we start training models.
+
+The second half of the session focused on chronological splitting. We're planning a 70/15/15 split within each user's rating history. I initially suggested taking 15% of the leftover interactions after allocating 70% to training, but realized that validation should receive 15% of the original total, not 15% of the remaining 30%.
+
+I also asked why we weren't using scikit-learn's `train_test_split()` or cross-validation like in my previous ML projects. The main reason is that we're trying to predict future preferences using earlier interactions. Random splitting could allow future ratings into the training history. GroupKFold would create a different problem, since holding out entire users means our model wouldn't have learned embeddings for them.
+
+One thing I spent extra time understanding was the actual data structure of `groupby()`. I was confused about what the loop variables represented, so I worked through how pandas returns a group identifier and a DataFrame containing that group's rows. I now understand that `train_groups` is a list of smaller DataFrames, one per user, while `pd.concat()` combines them into one large training DataFrame.
+
+We finished by discussing an evaluation issue: some users might have no positive interactions in their held-out sets. That would make certain recommendation metrics undefined for those users. We'll need to decide how to handle this consistently rather than ignoring the problem.
+
+Overall, today's biggest progress was moving from exploratory analysis toward a reusable ML pipeline. I also got a much better understanding of pandas indexing, group iteration, and why chronological evaluation matters.
+
+**Next session:** Finish implementing and testing the chronological split, decide how to handle users with no positive held-out interactions, save the splits, and begin building the popularity baseline.
