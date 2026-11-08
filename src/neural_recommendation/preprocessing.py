@@ -46,7 +46,7 @@ def split_data(ratings: pd.DataFrame, train_ratio: float = 0.7, val_ratio: float
 
     return train, val, test
 
-train_df, val_df, test_df = split_data(ratings)
+
 
 def save_splits(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, output_dir: Path = PROJECT_ROOT / "data" / "processed" / "movie_data"):
     """Save the train, validation, and test DataFrames to CSV files."""
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     save_splits(train_df, val_df, test_df)
 
-    print("Chronological splits saved successfully!")
+    print("Successfully saved the chronological train, validation, and test splits to CSV files.")
 
 #total = len(ratings)
 
