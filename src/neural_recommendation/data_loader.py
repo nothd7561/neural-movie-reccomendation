@@ -6,7 +6,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RAW_DATA_PATH = (
     PROJECT_ROOT / "data" / "raw" / "movie_data" / "ratings.dat")
 
+MOVIES_DATA_PATH = (
+    PROJECT_ROOT / "data" / "raw" / "movie_data" / "movies.dat")
+
 PROCESSED_DATA_PATH = (PROJECT_ROOT / "data" / "processed" / "movie_data" / "ratings.csv")
+
+def load_movies():
+    """Load MovieLens movie .dat file"""
+    movies = pd.read_csv(MOVIES_DATA_PATH,
+                         sep="::",
+        engine="python",
+        names=["movie_id", "title", "genres"],
+        encoding="latin-1"
+    )
+
+    return movies
 
 def load_ratings(positive_threshold: int = 4):
     """Load MovieLens ratings and perform preprocessing"""

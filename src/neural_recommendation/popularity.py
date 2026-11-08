@@ -48,3 +48,23 @@ def get_recommendations(user_history: set, ranked_ratings: pd.Series, top_n: int
 
     return recommendations
     #returns a list
+
+if __name__ == "__main__":
+    train_df = pd.read_csv(PROCESSED_DATA_PATH)
+
+    ranked_ratings = rank_positive_ratings()
+    user_movies = get_user_history(train_df)
+
+    # Generate recommendations for individual users
+    recommendations_1 = get_recommendations(
+        user_movies[1], ranked_ratings
+    )
+
+    recommendations_2 = get_recommendations(
+        user_movies[2], ranked_ratings
+    )
+
+    print("User 1:", recommendations_1)
+    print("User 2:", recommendations_2)
+
+
