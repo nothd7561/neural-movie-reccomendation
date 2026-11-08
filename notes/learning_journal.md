@@ -77,3 +77,27 @@ We finished by discussing an evaluation issue: some users might have no positive
 Overall, today's biggest progress was moving from exploratory analysis toward a reusable ML pipeline. I also got a much better understanding of pandas indexing, group iteration, and why chronological evaluation matters.
 
 **Next session:** Finish implementing and testing the chronological split, decide how to handle users with no positive held-out interactions, save the splits, and begin building the popularity baseline.
+
+# November 7, 2026 — Building the Popularity Baseline
+
+Today I continued working on the Neural Recommendation System, mainly finishing the preprocessing stage and starting our first actual recommendation model.
+
+I started by checking that our chronological splitting function worked correctly. I had already written the function to split each user's interactions into training, validation, and testing sets using a 70/15/15 ratio, and confirmed that the outputs looked right. I also implemented `save_splits()` to save the three datasets as separate CSV files, which means we won't need to rerun our entire preprocessing pipeline every time we train a model.
+
+One thing I was still confused about was the purpose of the `if __name__ == "__main__":` statement. I learned that when Python imports a module, it executes the top-level code but doesn't automatically execute the bodies of functions that are only being defined. The `__main__` guard allows us to run our preprocessing pipeline directly without triggering it every time another script imports one of its functions. This also helped me understand that our Python modules are mainly collections of reusable functions, with optional execution code at the bottom.
+
+We also finalized how we're going to handle users who don't have positive interactions in their held-out datasets. Rather than deleting those users from training, we'll keep them and only exclude them from ranking metrics that require positive test or validation interactions. I learned that this could introduce selection bias, since the users we evaluate might have different rating habits from the users we exclude. We'll need to report evaluation coverage alongside our model results.
+
+After that, I moved on to building the popularity baseline. Initially, I thought popularity should simply mean the total number of ratings a movie receives, since a movie with more ratings is generally more popular. However, for our project, we decided to define popularity using the number of positive ratings instead. This aligns better with our goal of recommending movies people are likely to enjoy.
+
+I wrote a function to group ratings by `movie_id`, sum the `is_positive` column, and rank movies in descending order. My first implementation used a dictionary and a for loop, but I later simplified it using pandas `groupby()`, `sum()`, and `sort_values()`. I also caught an important data leakage issue: I had initially used the complete processed ratings dataset rather than the training split. We corrected that so our popularity scores only use training data.
+
+The next challenge was making recommendations for individual users. I learned that we need to exclude movies someone has already rated, regardless of whether they liked or disliked them. I initially created a function called `rid_duplicates()` that built a dictionary mapping each user ID to a set of movies they'd rated. I then separated this into a `get_user_history()` function because identifying previously rated movies and filtering recommendations are two different responsibilities. This should also make the code easier to reuse when we build the more advanced models.
+
+I then worked on `get_recommendations()`, which takes a user's rating history, goes through the popularity ranking, skips movies they've already rated, and collects the top 10 unseen movies. My loop logic was correct, but I initially tried to call the ranking function again inside the recommendation function, even though the ranking was already being passed as an argument. I also learned that iterating directly over a pandas Series gives its values, not its index. Since our Series uses movie IDs as the index and positive-rating counts as the values, we need to iterate over `.index` to access the actual movie IDs.
+
+Overall, I feel like I'm starting to understand how the different parts of a machine learning project fit together. We're keeping the data loading, preprocessing, popularity ranking, and recommendation filtering in separate functions rather than putting everything into one large script. The popularity model itself is pretty simple, but it's important because it'll give us a baseline to compare against matrix factorization and neural collaborative filtering later.
+
+We now have the core popularity-ranking and recommendation functions written, although we haven't tested the complete recommendation pipeline on actual users yet.
+
+**Next session:** Run the popularity baseline, verify that it returns 10 unseen movies per user, connect movie IDs to actual titles, and begin implementing our ranking evaluation metrics.
