@@ -31,3 +31,20 @@ def get_user_history(train_df: pd.DataFrame):
 
     for user_id, user_ratings in train_df.groupby('user_id'):
         user_movies[user_id] = set(user_ratings['movie_id'])
+
+    return user_movies
+    #returns a dict
+
+def get_recommendations(user_history: set, ranked_ratings: pd.Series, top_n: int = 10):
+#user_history is the set, since we plan to call this function for each user
+    """Recommend movies to users based on popularity, excluding those they've already rated."""
+    recommendations = []
+
+    for movie_id in ranked_ratings.index:  #loop over the positive rating movie ids
+        if movie_id not in user_history:  #if the movie id is not in the user's history, we can recommend it
+            recommendations.append(movie_id) 
+            if len(recommendations) >= top_n:
+                break
+
+    return recommendations
+    #returns a list
