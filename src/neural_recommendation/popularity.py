@@ -1,23 +1,20 @@
 import pandas as pd
 from pathlib import Path
+from neural_recommendation.data_loader import load_movies
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 PROCESSED_DATA_PATH = (PROJECT_ROOT / "data" / "processed" / "movie_data" / "train_ratings.csv")
 
-def rank_positive_ratings(csv_path: Path = PROCESSED_DATA_PATH): 
+def rank_positive_ratings(train_df: pd.DataFrame): 
     """Count the number of positive ratings for each movie, then rank in descending order."""
-    if not csv_path.exists():  #check for the csv path, make sure it exists, if not, raise an error
-        raise FileNotFoundError(f"The file {csv_path} does not exist.")
 
-    ranked_ratings = pd.read_csv(csv_path) #read the csv file into a dataframe
-
-    if 'is_positive' not in ranked_ratings.columns: #if our csv is missing the is postive column, raise an error
+    if 'is_positive' not in train_df.columns: #if our csv is missing the is postive column, raise an error
         raise ValueError("The 'is_positive' column is missing from the DataFrame.")
 
-    ranked_ratings = ranked_ratings['is_positive'].groupby(
-        ranked_ratings['movie_id']).sum().sort_values(
+    ranked_ratings = train_df['is_positive'].groupby(
+        train_df['movie_id']).sum().sort_values(
             ascending=False
         )
     #group the dataframe by movie_id, then sum the is_positive column to get the total number of positive ratings for each movie
@@ -26,7 +23,7 @@ def rank_positive_ratings(csv_path: Path = PROCESSED_DATA_PATH):
     return ranked_ratings
 
 def get_user_history(train_df: pd.DataFrame):
-    """Take away movies that a user has already rated, so we don't recommend them again."""
+    """Create a dictionary mapping each user to their rated movie IDs."""
     user_movies = {}
 
     for user_id, user_ratings in train_df.groupby('user_id'):
@@ -52,19 +49,26 @@ def get_recommendations(user_history: set, ranked_ratings: pd.Series, top_n: int
 if __name__ == "__main__":
     train_df = pd.read_csv(PROCESSED_DATA_PATH)
 
-    ranked_ratings = rank_positive_ratings()
+    ranked_ratings = rank_positive_ratings(train_df)
     user_movies = get_user_history(train_df)
 
-    # Generate recommendations for individual users
-    recommendations_1 = get_recommendations(
-        user_movies[1], ranked_ratings
-    )
+    user_id = 1
 
-    recommendations_2 = get_recommendations(
-        user_movies[2], ranked_ratings
-    )
+    recommendations = get_recommendations(
+        user_history=user_movies[user_id],
+        ranked_ratings=ranked_ratings,
+        top_n=10)
+    
 
-    print("User 1:", recommendations_1)
-    print("User 2:", recommendations_2)
+    movie_df = load_movies()
+    #load the movie data into a dataframe, using our load_movies function from data_loader.py
+
+    recommended_movie_titles = movie_df.set_index('movie_id').loc[recommendations].reset_index()
+
+    print(recommended_movie_titles.to_string(index=False))
+
+
+
+
 
 
