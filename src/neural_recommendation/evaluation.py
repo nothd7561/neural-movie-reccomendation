@@ -29,8 +29,11 @@ def precision_at_k(recommendations: list, relevant_movies: set, k: int = 10):
     """Fraction of the top K recommendations that are relevant."""
 
     top_k = recommendations[:k]
-    common_items = len(set(top_k) & relevant_movies)
+    #count how many of the top k relevant movies are in the recommendations
 
+    common_items = len(set(top_k) & relevant_movies)
+    #calculate the precision by dividing the number of relevant items in the top k recommendations by k
+ 
     return common_items / k
 
 
@@ -39,29 +42,32 @@ def recall_at_k(recommendations: list, relevant_movies: set, k: int = 10):
 
     if not relevant_movies:
         return 0.0
+    #if there are no relevant movies, we cannot calculate recall, so we return 0
 
     top_k = recommendations[:k]
     common_items = len(set(top_k) & relevant_movies)
+
 
     return common_items / len(relevant_movies)
 
 
 def ndcg_at_k(recommendations: list, relevant_movies: set, k: int = 10):
     """Calculate normalized discounted cumulative gain at K."""
+    #How highly did we rank the relevant movies?
 
     if not relevant_movies:
         return 0.0
 
     top_k = recommendations[:k]
 
-    # Actual discounted cumulative gain
+    #actual discounted cumulative gain
     dcg = sum(
         1 / log2(rank + 2)
         for rank, movie_id in enumerate(top_k)
         if movie_id in relevant_movies
     )
 
-    # Best possible discounted cumulative gain
+    #best possible discounted cumilative gain
     ideal_hits = min(len(relevant_movies), k)
 
     idcg = sum(
@@ -74,7 +80,7 @@ def ndcg_at_k(recommendations: list, relevant_movies: set, k: int = 10):
 
 ###MODEL EVALUATION
 
-def evaluate_model(recommend_fn, user_histories: dict,
+def evaluate_model(recommend_function, user_histories: dict,
                    val_df: pd.DataFrame, k: int = 10):
     """Evaluate recommendations across users with positive validation ratings."""
 
@@ -82,7 +88,7 @@ def evaluate_model(recommend_fn, user_histories: dict,
     recall_scores = []
     ndcg_scores = []
 
-    # Map each user to their positively rated validation movies
+    #map each user to their positively rated validation movies
     positive_val = val_df[val_df["is_positive"] == 1]
 
     relevant_by_user = {
@@ -98,7 +104,7 @@ def evaluate_model(recommend_fn, user_histories: dict,
         if not relevant_movies:
             continue
 
-        recommendations = recommend_fn(user_id, user_history, k)
+        recommendations = recommend_function(user_id, user_history, k)
 
         if len(recommendations) != k or len(set(recommendations)) != k:
             raise ValueError(f"Expected {k} unique recommendations for user {user_id}")
@@ -130,15 +136,15 @@ def evaluate_model(recommend_fn, user_histories: dict,
 
 if __name__ == "__main__":
 
-    # 1. Load data
+    #1. load data
     train_df = pd.read_csv(TRAIN_DATA_PATH)
     val_df = pd.read_csv(VAL_DATA_PATH)
 
-    # 2. Build popularity baseline
+    #2. build popularity baseline
     ranked_ratings = rank_positive_ratings(train_df)
     user_histories = get_user_history(train_df)
 
-    # 3. Define how the popularity model recommends movies
+    #3. define how the popularity model ranks recommendations
     def popularity_recommend(user_id, user_history, k):
         return get_recommendations(
             user_history=user_history,
@@ -146,7 +152,7 @@ if __name__ == "__main__":
             top_n=k
         )
 
-    # 4. Evaluate the model
+    #4. evaluate the model
     results = evaluate_model(
         recommend_fn=popularity_recommend,
         user_histories=user_histories,
@@ -154,7 +160,7 @@ if __name__ == "__main__":
         k=10
     )
 
-    # 5. Display results
+    #5. display the results
     print(f"Users evaluated: {results['users_evaluated']}")
     print(f"Precision@10: {results['precision_at_k']:.4f}")
     print(f"Recall@10:    {results['recall_at_k']:.4f}")
