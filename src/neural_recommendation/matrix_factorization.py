@@ -86,6 +86,7 @@ class MatrixFactorization(nn.Module):
 
         user_biases = self.user_bias(user_indices).squeeze(-1)
         movie_biases = self.movie_bias(user_indices).squeeze(-1)
+        #remove the 2nd dimension from the embedding table, so that our bias matches our dot product dimension
 
 
         predictions = ((user_vectors * movie_vectors).sum(dim=1) + user_biases + movie_biases + self.global_mean)
@@ -94,7 +95,41 @@ class MatrixFactorization(nn.Module):
         return predictions
         
 
-def train_model():
+def train_model( model: MatrixFactorization,train_loader: DataLoader,epochs: int = 10,
+                learning_rate: float = 0.001):
+    mse_loss = nn.MSELoss()
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-def recommend_movies():
+    model.train()
+
+    for epoch in range(epochs):
+        total_loss = 0.0
+
+        for user_batch, movie_batch, rating_batch in train_loader:
+            predictions = model(user_batch, movie_batch)
+
+            loss = mse_loss(rating_batch, predictions)
+            #get the meansquared error for said batch
+
+            optimizer.zero_grad()
+            #clean the gradients from the previous epoch
+
+            loss.backward()
+            #use backwards propagation to calculate gradients for the current epoch
+            optimizer.step()
+            #call Adam to use the historical gradients to update hyperparameters
+
+            total_loss += loss.item() * rating_batch.size(0)
+
+        average_loss = total_loss / len(train_loader.dataset)
+        print(f'{epoch + 1}/{epochs}: mse for this epoch is {average_loss}')
+
+    return model
+
+def recommend_movies(model: MatrixFactorization,
+    user_id: int,
+    user_to_idx: dict,
+    movie_to_idx: dict,
+    user_history: set,
+    k: int = 10):

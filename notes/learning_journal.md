@@ -101,3 +101,189 @@ Overall, I feel like I'm starting to understand how the different parts of a mac
 We now have the core popularity-ranking and recommendation functions written, although we haven't tested the complete recommendation pipeline on actual users yet.
 
 **Next session:** Run the popularity baseline, verify that it returns 10 unseen movies per user, connect movie IDs to actual titles, and begin implementing our ranking evaluation metrics.
+
+# November 12, 2026 — Neural Recommendation System
+
+Today I continued working on the Neural Movie Recommendation project, focusing mainly on understanding how matrix factorization works and beginning its implementation in PyTorch.
+
+### Popularity Baseline Results
+
+Before moving into matrix factorization, I finished running the popularity baseline evaluation across our validation users.
+
+The results were:
+
+- **Users evaluated:** 5,933
+- **Precision@10:** 0.0641
+- **Recall@10:** 0.0501
+- **NDCG@10:** 0.0759
+
+The popularity baseline works by counting the number of positive training ratings each movie receives, ranking movies based on those counts, and recommending the top unseen movies to each user.
+
+The biggest limitation is that it isn't really personalized. Two users will generally receive the same recommendations except for movies they've already rated.
+
+These results now serve as our benchmark. The goal is to see whether matrix factorization and neural collaborative filtering can improve recommendation quality by learning individual preferences.
+
+### Understanding Matrix Factorization
+
+I started learning how matrix factorization works. The main idea is that instead of ranking movies globally, we assign each user and movie an embedding.
+
+An **embedding is a vector of learned numbers representing a user or movie**. For example, a user embedding might be `[0.8, 0.2, 0.5]`.
+
+These numbers aren't manually assigned, and they don't necessarily represent obvious characteristics like action or romance. They're learned through training.
+
+An **embedding table** is just a matrix containing all the embeddings. Each row represents a user or movie, while each column represents an embedding dimension.
+
+For example, 6,040 users with 16 embedding dimensions would give us a table of shape `6040 × 16`.
+
+We use the dot product between a user's embedding and a movie's embedding to estimate their compatibility. This means multiplying the corresponding elements of both vectors and summing the products.
+
+During training, the embeddings are updated to produce predictions that more closely match actual ratings.
+
+### Why We Need Embedding Indices
+
+One thing I initially struggled with was understanding the difference between original IDs, embedding indices, and embeddings.
+
+- **Original ID:** Identifies a user or movie in MovieLens.
+- **Embedding index:** Identifies the row in an embedding table.
+- **Embedding:** The actual vector of learnable numbers stored in that row.
+
+Because MovieLens IDs aren't necessarily consecutive, we created dictionaries such as `user_to_idx` and `movie_to_idx`.
+
+For example, if User 20 maps to index 1, PyTorch retrieves row 1 of the user embedding table.
+
+The indices don't change during training. The numbers inside the embeddings do.
+
+### Preparing the Data for PyTorch
+
+I worked on `prepare_data()`, which converts our MovieLens data into a format PyTorch can use.
+
+First, we extract unique user and movie IDs and map them to consecutive indices.
+
+Then we use pandas `.map()` to convert the original IDs into embedding indices.
+
+We also extract the actual rating column, which is our supervised learning target.
+
+We convert these into three tensors:
+
+- `user_tensor`: Contains user embedding indices.
+- `movie_tensor`: Contains movie embedding indices.
+- `rating_tensor`: Contains actual movie ratings.
+
+An important distinction is that **these tensors don't contain the learned embeddings**. They contain the information needed to retrieve embeddings and train the model.
+
+We use `torch.long` for indices because embedding lookups require integer indices, and `torch.float32` for ratings because they're used in numerical predictions and loss calculations.
+
+I also learned the difference between `TensorDataset` and `DataLoader`.
+
+`TensorDataset` groups corresponding user indices, movie indices, and ratings into training observations.
+
+`DataLoader` provides those observations in batches and can shuffle them during training.
+
+This makes it possible to process the dataset in smaller batches instead of handling every observation simultaneously.
+
+### Building the MatrixFactorization Class
+
+I started implementing the `MatrixFactorization` class, which inherits from PyTorch's `nn.Module`.
+
+`nn.Module` provides the infrastructure for building models and tracking learnable parameters.
+
+Within `__init__()`, we created two embedding layers:
+
+- `nn.Embedding(num_users, embedding_dim)`
+- `nn.Embedding(num_movies, embedding_dim)`
+
+I initially had trouble understanding what these layers actually contained. They're essentially learnable tables of numbers, stored in the layer's weight matrix.
+
+When we pass user indices into `self.user_embeddings(user_indices)`, PyTorch retrieves the corresponding rows from the user embedding table.
+
+The `forward()` method then retrieves the user and movie vectors and calculates their dot products.
+
+I also learned that we don't need to manually loop through every observation. PyTorch supports vectorized operations.
+
+For example:
+
+`(user_vectors * movie_vectors).sum(dim=1)`
+
+This multiplies corresponding embedding values and sums them across each row, producing one prediction per user–movie observation.
+
+### User Biases, Movie Biases, and Global Mean
+
+We also added user and movie biases to improve the prediction formula.
+
+A **user bias** accounts for users who generally rate movies higher or lower than average.
+
+A **movie bias** accounts for movies that generally receive higher or lower ratings.
+
+Each user and movie gets one learnable bias value, so their bias embedding tables have one column.
+
+We use `.squeeze(-1)` when retrieving biases because the output initially has shape `(batch_size, 1)`, while our predicted ratings have shape `(batch_size,)`.
+
+Squeezing removes that unnecessary dimension without removing any values. It also prevents incorrect broadcasting when adding biases to predictions.
+
+We also included a global mean rating, calculated from training data, to give the model a reference point for predictions.
+
+The resulting prediction formula is:
+
+**Predicted rating = global mean + user/movie embedding dot product + user bias + movie bias.**
+
+The embeddings and biases are learned during training. We don't manually calculate their final values.
+
+### Beginning train_model() — MSE and Adam
+
+Toward the end of the session, I started working on the `train_model()` function.
+
+Its purpose is to take our model and training data, calculate prediction errors, and update the learnable parameters to reduce those errors.
+
+We established four parameters:
+
+- `model`: The matrix factorization object containing the learnable parameters.
+- `train_loader`: Supplies batches of training data.
+- `epochs`: Number of complete passes through the training dataset.
+- `learning_rate`: Controls the overall scale of parameter updates.
+
+We decided to use MSE because we're training our matrix factorization model to predict numerical star ratings.
+
+We initialized the loss function using `nn.MSELoss()`.
+
+I also asked what an **Adam optimizer** actually is because I hadn't learned it before.
+
+Adam stands for **Adaptive Moment Estimation**. It's an optimization algorithm that updates a model's parameters to reduce its loss.
+
+Ordinary gradient descent uses the current gradient to determine a parameter update. Adam also maintains moving estimates of previous gradients and squared gradients, allowing it to adapt updates for individual parameters.
+
+In simpler terms, Adam is an adaptive gradient-based optimizer.
+
+For our model, Adam will update the learnable numbers inside the user embedding table, movie embedding table, and bias tables.
+
+The syntax is:
+
+`optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)`
+
+`model.parameters()` supplies the learnable parameters, while `lr` specifies the learning rate.
+
+One important distinction I learned is that **backpropagation calculates gradients, while the optimizer uses those gradients to update parameters**.
+
+PyTorch handles the mathematics of Adam, so we don't need to implement its formulas ourselves.
+
+### What I Want to Remember
+
+The main concepts I want to be able to explain without looking them up are:
+
+- Why matrix factorization can generate personalized recommendations while a popularity baseline cannot.
+- What an embedding is and why embeddings are stored in tables.
+- Why we map original IDs to embedding indices.
+- How PyTorch retrieves embeddings and uses their dot product to make predictions.
+- How tensors, TensorDataset, and DataLoader work together.
+- Why biases and a global rating mean are useful.
+- What `nn.Module`, `nn.Embedding`, and `forward()` do.
+- What Adam is, how it differs from basic gradient descent, and what parameters it updates.
+
+### Next Steps
+
+I've begun setting up `train_model()`, but the training loop isn't finished yet.
+
+Next, I need to implement the epoch and batch loops, generate predictions, calculate MSE, call backpropagation, and use Adam to update the model parameters.
+
+After training works, I'll implement `recommend_movies()`, generate personalized recommendations, and evaluate matrix factorization using the same Precision@10, Recall@10, and NDCG@10 metrics as our popularity baseline.
+
+The main goal is still to determine whether learning personalized user–movie embeddings actually improves recommendation quality.
