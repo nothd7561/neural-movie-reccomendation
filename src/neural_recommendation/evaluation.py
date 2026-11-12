@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     #4. evaluate the model
     results = evaluate_model(
-        recommend_fn=popularity_recommend,
+        recommend_function=popularity_recommend,
         user_histories=user_histories,
         val_df=val_df,
         k=10
