@@ -102,9 +102,12 @@ class MatrixFactorization(nn.Module):
 
         self.user_embeddings = nn.Embedding(num_users, embedding_dim)
         self.movie_embeddings = nn.Embedding(num_movies, embedding_dim)
+        #creates a table with one row per users, and the # of columns as embedding dimension amounts to
+        #the columns are the vector values 
 
         nn.init.normal_(self.user_embeddings.weight, mean=0.0, std=0.05)
         nn.init.normal_(self.movie_embeddings.weight, mean=0.0, std=0.05)
+        #initialize random values for the embeddinggs, so the model can learn useful representations from the data
 
         self.user_bias = nn.Embedding(num_users, 1)
         self.movie_bias = nn.Embedding(num_movies, 1)
@@ -118,7 +121,7 @@ class MatrixFactorization(nn.Module):
     def forward(self, user_indices, movie_indices):
         user_vectors = self.user_embeddings(user_indices)
         movie_vectors = self.movie_embeddings(movie_indices)
-        #these create embedding layers, which is basically just a table 
+        #these create embedding layers, so get the vector for every user and movie
 
         user_biases = self.user_bias(user_indices).squeeze(-1)
         movie_biases = self.movie_bias(movie_indices).squeeze(-1)
@@ -126,7 +129,7 @@ class MatrixFactorization(nn.Module):
 
 
         predictions = ((user_vectors * movie_vectors).sum(dim=1) + user_biases + movie_biases + self.global_mean)
-        #dot product for each user-movie pair
+        #dot product for each user-movie pair, add the biases and global mean according to the formula
 
         return predictions
         
