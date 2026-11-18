@@ -1,11 +1,18 @@
 import pandas as pd
 from pathlib import Path
 from neural_recommendation.data_loader import load_movies
+from neural_recommendation.popularity_diagnostic import analyze_recommendation_popularity
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 PROCESSED_DATA_PATH = (PROJECT_ROOT / "data" / "processed" / "movie_data" / "train_ratings.csv")
+
+VAL_DATA_PATH = (
+    PROJECT_ROOT / "data" / "processed"
+    / "movie_data" / "val_ratings.csv"
+)
 
 def rank_positive_ratings(train_df: pd.DataFrame): 
     """Count the number of positive ratings for each movie, then rank in descending order."""
@@ -48,6 +55,7 @@ def get_recommendations(user_history: set, ranked_ratings: pd.Series, top_n: int
 
 if __name__ == "__main__":
     train_df = pd.read_csv(PROCESSED_DATA_PATH)
+    val_df = pd.read_csv(VAL_DATA_PATH)
 
     ranked_ratings = rank_positive_ratings(train_df)
     user_movies = get_user_history(train_df)
@@ -66,6 +74,32 @@ if __name__ == "__main__":
     recommended_movie_titles = movie_df.set_index('movie_id').loc[recommendations].reset_index()
 
     print(recommended_movie_titles.to_string(index=False))
+
+        # Get users with at least one positive validation rating
+    eligible_user_ids = (
+        val_df.loc[val_df["is_positive"] == 1, "user_id"]
+        .unique()
+    )
+
+    # Adapter for the popularity recommendation function
+    def popularity_recommend(user_id, user_history, k):
+        return get_recommendations(
+            user_history=user_history,
+            ranked_ratings=ranked_ratings,
+            top_n=k
+        )
+
+    # Analyze the popularity of recommended movies
+    diagnostic_results = analyze_recommendation_popularity(
+        recommend_fn=popularity_recommend,
+        user_histories=user_movies,
+        train_df=train_df,
+        user_ids=eligible_user_ids,
+        k=10
+    )
+
+    print("Popularity Baseline Recommendation Popularity:")
+    print(diagnostic_results)
 
 
 

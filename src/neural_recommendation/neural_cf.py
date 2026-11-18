@@ -5,6 +5,9 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from pathlib import Path
 import torch.optim as optim
+from neural_recommendation.popularity import get_user_history
+from neural_recommendation.evaluation import evaluate_model
+from neural_recommendation.popularity_diagnostic import analyze_recommendation_popularity
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -55,6 +58,33 @@ def prepare_ncf_data(train_df : pd.DataFrame):
     return train_loader, user_dict, movie_dict
 
 def prepare_ncf_validation(val_df, user_dict, movie_dict):
+    initial_count = len(val_df)
+
+    val_df = val_df[
+    (val_df['user_id'].isin(user_dict)) &
+    (val_df['movie_id'].isin(movie_dict))].copy()
+    #create a copy of the validation df of only rows that have movie and user ids common with the training df
+
+    filtered_count = len(val_df)
+    print(f'Filtered rows: {initial_count - filtered_count}')
+
+    user_indices = val_df['user_id'].map(user_dict)
+    movie_indices = val_df['movie_id'].map(movie_dict)
+    positives = val_df['is_positive']
+
+    user_tensor = torch.tensor(user_indices.to_numpy(), dtype=torch.long)
+    movie_tensor = torch.tensor(movie_indices.to_numpy(), dtype=torch.long)
+    label_tensor = torch.tensor(positives.to_numpy(), dtype=torch.float32)
+
+    dataset = TensorDataset(user_tensor, movie_tensor, label_tensor)
+        #create a tensor dataset from our user/movie/labels tensors
+    
+    val_loader = DataLoader(
+        dataset,
+        batch_size=256,
+        shuffle=False)
+    return val_loader
+
 
 class NeuralCollaborativeFiltering(nn.Module):
     def __init__(self, num_users, num_movies, embedding_dim=16):
@@ -148,12 +178,49 @@ def recommend_ncf(model: NeuralCollaborativeFiltering,
     
     return top_movies
 
+
+
 if __name__ == "__main__":
     train_df = pd.read_csv(TRAIN_PATH)
     val_df = pd.read_csv(VAL_PATH)
      
     train_loader, user_dict, movie_dict = prepare_ncf_data(train_df)
-    val_loader = prepare_ncf_data(val_df, user_dict, movie_dict)
+    val_loader = prepare_ncf_validation(val_df, user_dict, movie_dict)
+
+    model = NeuralCollaborativeFiltering(num_users=len(user_dict),
+    num_movies=len(movie_dict), embedding_dim=16)
+
+    user_histories = get_user_history(train_df)
+
+    trained_model = train_ncf(model,
+    train_loader,
+    epochs=10,
+    learning_rate=0.001)
+
+    def ncf_recommend(user_id, user_history, k):
+        recommendations = recommend_ncf(model=trained_model, user_id=user_id,user_dict=user_dict,
+                      movie_dict=movie_dict, user_history=user_history, k=k)
+
+        return recommendations
+
+    results = evaluate_model(ncf_recommend, user_histories, val_df, k=10)
+
+    print(results)
+
+    eligible_user_ids = (
+    val_df.loc[val_df["is_positive"] == 1, "user_id"]
+    .unique())
+
+    diagnostic_results = analyze_recommendation_popularity(
+        recommend_fn=ncf_recommend,
+        user_histories=user_histories,
+        train_df=train_df,
+        user_ids=eligible_user_ids,
+        k=10)
+
+    print("NCF recommendation popularity:")
+    print(diagnostic_results)
+        
 
 
     

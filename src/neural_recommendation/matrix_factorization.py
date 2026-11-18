@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from pathlib import Path
+from neural_recommendation.popularity_diagnostic import analyze_recommendation_popularity
 
 
 ### GOAL : PREDICT MOVIES A USER MIGHT LIKE BASED ON THEIR HISTORICAL RATINGS USING MATRIX FACTORIZATION
@@ -239,4 +240,21 @@ if __name__ == "__main__":
 
     results = evaluate_model(mf_recommend, user_histories, val_df, k=10)
     print(results)
+        # Get the same validation users used for evaluation
+    eligible_user_ids = (
+        val_df.loc[val_df["is_positive"] == 1, "user_id"]
+        .unique()
+    )
+
+    # Analyze how popular the recommended movies are
+    diagnostic_results = analyze_recommendation_popularity(
+        recommend_fn=mf_recommend,
+        user_histories=user_histories,
+        train_df=train_df,
+        user_ids=eligible_user_ids,
+        k=10
+    )
+
+    print("Matrix Factorization Recommendation Popularity:")
+    print(diagnostic_results)
 

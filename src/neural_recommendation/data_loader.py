@@ -65,5 +65,6 @@ def save_ratings(ratings: pd.DataFrame):
 
     ratings.to_csv(PROCESSED_DATA_PATH, index=False)
 
-loaded_ratings = load_ratings()
-save_ratings(loaded_ratings)
+if __name__ == "__main__":
+    loaded_ratings = load_ratings()
+    save_ratings(loaded_ratings)
