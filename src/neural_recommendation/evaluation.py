@@ -91,20 +91,25 @@ def evaluate_model(recommend_function, user_histories: dict,
     #map each user to their positively rated validation movies
     positive_val = val_df[val_df["is_positive"] == 1]
 
-    relevant_by_user = {
-        user_id: set(user_ratings["movie_id"])
-        for user_id, user_ratings in positive_val.groupby("user_id")
-    }
+    relevant_by_user = {}
+
+    for user_id, user_ratings in positive_val.groupby("user_id"):
+        relevant_by_user[user_id] = set(user_ratings['movie_id'])
+        #create a dictionary of user_ids, and their positive rated movies from the validation set
+        #this is so we can use the metric functions to compare the validation with our training predictions
 
     for user_id, user_history in user_histories.items():
 
         relevant_movies = relevant_by_user.get(user_id, set())
+        #if the user exists in relevant_by_user, retrieve their positive validation movies.
+        #if the user doesn't exist, return an empty set 
 
         # Skip users without positive validation ratings
         if not relevant_movies:
             continue
 
         recommendations = recommend_function(user_id, user_history, k)
+        #get our recommendations from the training set
 
         if len(recommendations) != k or len(set(recommendations)) != k:
             raise ValueError(f"Expected {k} unique recommendations for user {user_id}")

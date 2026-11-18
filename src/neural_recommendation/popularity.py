@@ -27,10 +27,11 @@ def rank_positive_ratings(train_df: pd.DataFrame):
     #group the dataframe by movie_id, then sum the is_positive column to get the total number of positive ratings for each movie
     #then sort the values in descending order so we can see which movies have the most positive ratings
     
-    return ranked_ratings
+    return ranked_ratings #Movie ids are the index, number of positive ratings are the values for the series
 
 def get_user_history(train_df: pd.DataFrame):
     """Create a dictionary mapping each user to their rated movie IDs."""
+    #all the movies the user has rated
     user_movies = {}
 
     for user_id, user_ratings in train_df.groupby('user_id'):
@@ -51,7 +52,8 @@ def get_recommendations(user_history: set, ranked_ratings: pd.Series, top_n: int
                 break
 
     return recommendations
-    #returns a list
+    #returns a list containing all the movies the user hasnt rated, descending from most popular
+    #only the top 10 recommendations
 
 if __name__ == "__main__":
     train_df = pd.read_csv(PROCESSED_DATA_PATH)
@@ -72,6 +74,7 @@ if __name__ == "__main__":
     #load the movie data into a dataframe, using our load_movies function from data_loader.py
 
     recommended_movie_titles = movie_df.set_index('movie_id').loc[recommendations].reset_index()
+    #set the movie_ids as the indexing column, then select rows matching the recommended movie IDs, in recommendation order
 
     print(recommended_movie_titles.to_string(index=False))
 
