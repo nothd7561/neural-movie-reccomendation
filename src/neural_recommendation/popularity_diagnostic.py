@@ -11,7 +11,6 @@ def analyze_recommendation_popularity(
 ):
     """
     Calculate the average training popularity of recommended movies.
-
     Popularity = number of training ratings received by a movie.
     """
 

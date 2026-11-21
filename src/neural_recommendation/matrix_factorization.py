@@ -137,18 +137,24 @@ class MatrixFactorization(nn.Module):
 def train_model( model: MatrixFactorization,train_loader: DataLoader, val_loader: DataLoader,epochs: int = 10,
                 learning_rate: float = 0.001):
     mse_loss = nn.MSELoss()
+    #create the object for the Loss function
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    #we utilize the Adam optimizer
 
     for epoch in range(epochs):
+        #repeats the training process for the amount of epochs
         model.train()
+        #
         total_loss = 0.0
         
         for user_batch, movie_batch, rating_batch in train_loader:
+
             predictions = model(user_batch, movie_batch)
+            #forward pass
 
             loss = mse_loss(rating_batch, predictions)
-            #get the meansquared error for said batch
+            #calculates the error
 
             optimizer.zero_grad()
             #clean the gradients from the previous batches
@@ -157,17 +163,23 @@ def train_model( model: MatrixFactorization,train_loader: DataLoader, val_loader
             #use backwards propagation to calculate gradients for the current epoch
             optimizer.step()
             #call Adam to use the historical gradients to update model parameters
+            #update the embeddings and biases
 
             total_loss += loss.item() * rating_batch.size(0)
+            #the treu average training MSE over the entire epoch
+            #multiply by rating_batch size since our batches aren't of equal size
 
         train_average_loss = total_loss / len(train_loader.dataset)
 
         model.eval()
+        #switch model into evaluation mode
         val_total_loss = 0.0
         
         with torch.no_grad():
+            #prevents pytorch from recording the operations for the gradients
             for user_batch, movie_batch, rating_batch in val_loader:
                 predictions = model(user_batch, movie_batch)
+                #predictions
                     
                 loss = mse_loss(rating_batch, predictions)
                 val_total_loss += loss.item() * rating_batch.size(0)
@@ -176,6 +188,7 @@ def train_model( model: MatrixFactorization,train_loader: DataLoader, val_loader
         print(f'{epoch + 1}/{epochs}: TRAIN MSE = {train_average_loss} | VAL MSE = {val_average_loss}')
 
     return model
+#the same model, now with updated embedding and bias parameters
 
 def recommend_movies(model: MatrixFactorization,
     user_id: int,
@@ -185,8 +198,9 @@ def recommend_movies(model: MatrixFactorization,
 
 
     user_idx = user_to_idx[user_id]
+    #retrieve the position of the user_id, so we can use that row of the embedding table
 
-    candidate_movies = []
+    candidate_movies = [] #all the possible movies to recommend
     candidate_indices = []
 
     for movie in movie_to_idx:
@@ -195,8 +209,10 @@ def recommend_movies(model: MatrixFactorization,
 
     for movie in candidate_movies:
             candidate_indices.append(movie_to_idx[movie])
+            #convert the movie IDs into embedding indices
 
     user_indices = [user_idx] * len(candidate_indices)
+    #get as many user indices as movie indices, since we;re predicting how that one user would rate every candidate movie
 
     movie_tensor = torch.tensor(candidate_indices, dtype=torch.long)
     user_tensor = torch.tensor(user_indices, dtype=torch.long)
@@ -206,10 +222,13 @@ def recommend_movies(model: MatrixFactorization,
     model.eval()
     with torch.no_grad():
        predictions =  model(user_tensor, movie_tensor)
+       #calls forward on both tensors
        positions = torch.argsort(predictions, descending=True)
+       #returns the positions in descending order, so if pos 0 had the highest prediction value, its first
 
        for idx in positions[:k]:
             top_movies.append(int(candidate_movies[idx.item()]))
+            #converts the positions back into their movie ids
 
     return top_movies
 
