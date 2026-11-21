@@ -412,32 +412,41 @@ def recommend_ncf(model: NeuralCollaborativeFiltering,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("dynamic", "fixed", "bce"), default="dynamic")
-    args = parser.parse_args()
 
     train_df = pd.read_csv(TRAIN_PATH)
     val_df = pd.read_csv(VAL_PATH)
+
     movie_counts = train_df.groupby("movie_id").size()
 
     train_loader, user_dict, movie_dict = prepare_ncf_data(train_df)
-    positive_by_user, unseen_by_user = prepare_bpr_sampling_data(train_df,user_dict,movie_dict)
 
     user_histories = get_user_history(train_df)
-    min_ratings = 50
+
+    positive_by_user, unseen_by_user = prepare_bpr_sampling_data(
+        train_df,
+        user_dict,
+        movie_dict)
+    rng = np.random.default_rng(42)
+
+    def epoch_loader():
+        return sample_bpr_epoch(
+            positive_by_user=positive_by_user,
+            unseen_by_user=unseen_by_user,
+            user_dict=user_dict,
+            rng=rng,
+            batch_size=256
+        )
 
     torch.manual_seed(42)
 
     bpr_model = NeuralCollaborativeFiltering(
         num_users=len(user_dict),
         num_movies=len(movie_dict),
-        embedding_dim=32
-    )
-
+        embedding_dim=32)
+    
     trained_bpr_model = train_bpr(
         model=bpr_model,
-        positive_by_user=positive_by_user,
-        unseen_by_user=unseen_by_user,
+        epoch_loader=epoch_loader,
         user_dict=user_dict,
         val_df=val_df,
         user_histories=user_histories,
@@ -445,28 +454,40 @@ if __name__ == "__main__":
         movie_counts=movie_counts,
         epochs=10,
         learning_rate=0.001,
-        min_ratings=50,
-        seed=42)
-    
+        min_ratings=50
+)
+
     def recommend(user_id, user_history, k):
         return recommend_ncf(
-            model=trained_model,
+            model=trained_bpr_model,
             user_id=user_id,
             user_dict=user_dict,
             movie_dict=movie_dict,
             user_history=user_history,
             movie_counts=movie_counts,
             k=k,
-            min_ratings=min_ratings)
+            min_ratings=50)
 
-    results = evaluate_model(recommend, user_histories, val_df, k=10)
-    print(f"{args.mode} validation results:", results)
+    results = evaluate_model(
+        recommend,
+        user_histories,
+        val_df,
+        k=10)
 
-    eligible_users = sorted(set(val_df.loc[val_df["is_positive"] == 1, "user_id"]) & user_histories.keys())
+    print("Dynamic BPR validation results:", results)
+
+    eligible_users = sorted(
+        set(val_df.loc[val_df["is_positive"] == 1, "user_id"])
+        & set(user_histories))
+
     diagnostic_results = analyze_recommendation_popularity(
-        recommend, user_histories, train_df, eligible_users, k=10
-    )
-    print(f"{args.mode} recommendation popularity:", diagnostic_results)
+        recommend,
+        user_histories,
+        train_df,
+        eligible_users,
+        k=10)
+
+    print("Dynamic BPR recommendation popularity:", diagnostic_results)
 
 #$env:PYTHONPATH = "src"
 #python -m neural_recommendation.neural_cf

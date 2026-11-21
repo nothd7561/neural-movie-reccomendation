@@ -137,9 +137,118 @@ def evaluate_model(recommend_function, user_histories: dict,
     }
 
 
+def run_final_test():
+    """Evaluate the existing models with the same test users and candidate movies."""
+    import random
+    import numpy as np
+    import torch
+    from neural_recommendation import matrix_factorization as mf
+    from neural_recommendation import neural_cf as ncf
+
+    seed = 42
+    k = 10
+    min_ratings = 50
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.set_num_threads(1)
+    torch.use_deterministic_algorithms(True)
+
+    train_df = pd.read_csv(TRAIN_DATA_PATH)
+    val_df = pd.read_csv(VAL_DATA_PATH)
+    user_histories = get_user_history(train_df)
+    movie_counts = train_df.groupby("movie_id").size()
+    candidate_movies = set(movie_counts[movie_counts >= min_ratings].index)
+    ranked_ratings = rank_positive_ratings(train_df)
+    ranked_ratings = ranked_ratings[ranked_ratings.index.isin(candidate_movies)]
+
+    def popularity_recommend(user_id, user_history, k):
+        return get_recommendations(user_history, ranked_ratings, k)
+
+    print("Training matrix factorization", flush=True)
+    torch.manual_seed(seed)
+    train_loader, mf_users, mf_movies = mf.prepare_data(train_df)
+    val_loader = mf.prepare_validation_data(val_df, mf_users, mf_movies)
+    mf_model = mf.MatrixFactorization(
+        len(mf_users), len(mf_movies), embedding_dim=16, global_mean=train_df["rating"].mean())
+    mf_model = mf.train_model(mf_model, train_loader, val_loader)
+    mf_candidates = {movie: index for movie, index in mf_movies.items() if movie in candidate_movies}
+
+    def mf_recommend(user_id, user_history, k):
+        return mf.recommend_movies(mf_model, user_id, mf_users, mf_candidates, user_history, k)
+
+    print("Training NCF + BCE", flush=True)
+    torch.manual_seed(seed)
+    train_loader, user_dict, movie_dict = ncf.prepare_ncf_data(train_df)
+    val_loader = ncf.prepare_ncf_validation(val_df, user_dict, movie_dict)
+    bce_model = ncf.NeuralCollaborativeFiltering(len(user_dict), len(movie_dict), embedding_dim=32)
+    bce_model = ncf.train_ncf(bce_model, train_loader, val_loader)
+
+    def bce_recommend(user_id, user_history, k):
+        return ncf.recommend_ncf(
+            bce_model, user_id, user_dict, movie_dict, user_history, movie_counts, k, min_ratings)
+
+    print("Training NCF + dynamic BPR", flush=True)
+    positive_by_user, unseen_by_user = ncf.prepare_bpr_sampling_data(train_df, user_dict, movie_dict)
+    rng = np.random.default_rng(seed)
+
+    def epoch_loader():
+        return ncf.sample_bpr_epoch(positive_by_user, unseen_by_user, user_dict, rng, batch_size=256)
+
+    torch.manual_seed(seed)
+    bpr_model = ncf.NeuralCollaborativeFiltering(len(user_dict), len(movie_dict), embedding_dim=32)
+    bpr_model = ncf.train_bpr(
+        bpr_model, epoch_loader, user_dict, val_df, user_histories, movie_dict, movie_counts,
+        min_ratings=min_ratings)
+
+    def bpr_recommend(user_id, user_history, k):
+        return ncf.recommend_ncf(
+            bpr_model, user_id, user_dict, movie_dict, user_history, movie_counts, k, min_ratings)
+
+    test_df = pd.read_csv(TRAIN_DATA_PATH.with_name("test_ratings.csv"))
+    val_histories = get_user_history(val_df)
+    test_users = set(test_df.loc[test_df["is_positive"] == 1, "user_id"])
+    test_histories = {
+        user_id: user_history | val_histories.get(user_id, set())
+        for user_id, user_history in user_histories.items()
+        if user_id in test_users
+    }
+
+    rows = []
+    for model, recommend, checkpoint_rule in (
+        ("Popularity", popularity_recommend, "Training positive-rating counts"),
+        ("Matrix factorization", mf_recommend, "Final epoch"),
+        ("NCF + BCE", bce_recommend, "Lowest validation BCE loss"),
+        ("NCF + dynamic BPR", bpr_recommend, "Highest validation NDCG@10 on 200 users"),
+    ):
+        print(f"Scoring {model} on the test split", flush=True)
+
+        def checked_recommend(user_id, user_history, k):
+            recommendations = recommend(user_id, user_history, k)
+            if any(movie not in candidate_movies or movie in user_history for movie in recommendations):
+                raise ValueError(f"{model} returned an ineligible movie for user {user_id}")
+            if len(recommendations) < k:
+                raise ValueError(f"{model} returned {len(recommendations)} recommendations for user {user_id}")
+            return recommendations
+
+        scores = evaluate_model(checked_recommend, test_histories, test_df, k=k)
+        rows.append(dict(
+            model=model, **scores, checkpoint_rule=checkpoint_rule, min_training_ratings=min_ratings))
+
+    results = pd.DataFrame(rows)
+    output_path = PROJECT_ROOT / "results" / "metrics" / "final_model_comparison.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    results.to_csv(output_path, index=False)
+    print(results.to_string(index=False))
+
+
 ###RUN THE EVALUATIONS FOR THE POPULARITY BASELINE
 
 if __name__ == "__main__":
+    import sys
+
+    if sys.argv[1:] == ["--final-test"]:
+        run_final_test()
+        raise SystemExit(0)
 
     #1. load data
     train_df = pd.read_csv(TRAIN_DATA_PATH)
