@@ -1,3 +1,5 @@
+import argparse
+from functools import partial
 import pandas as pd
 import numpy as np
 import torch
@@ -144,6 +146,80 @@ def prepare_bpr_data(train_df: pd.DataFrame,user_dict: dict,movie_dict: dict,bat
 
     return bpr_loader
 
+def prepare_bpr_sampling_data(train_df, user_dict, movie_dict):
+    """Prepare reusable positive interactions and negative candidate pools."""
+
+    all_movies = set(movie_dict.keys())
+    user_histories = get_user_history(train_df)
+
+    positive_df = train_df.loc[
+        train_df["is_positive"] == 1,
+        ["user_id", "movie_id"]
+    ]
+
+    positive_by_user = {}
+    unseen_by_user = {}
+
+    for user_id, user_ratings in positive_df.groupby("user_id"):
+
+        positive_by_user[user_id] = np.array(
+            [movie_dict[m] for m in user_ratings["movie_id"]],
+            dtype=np.int64
+        )
+
+        unseen_by_user[user_id] = np.array(
+            [movie_dict[m] for m in sorted(
+                all_movies - user_histories[user_id]
+            )],
+            dtype=np.int64
+        )
+
+    return positive_by_user, unseen_by_user
+
+def sample_bpr_epoch(
+    positive_by_user,
+    unseen_by_user,
+    user_dict,
+    rng,
+    batch_size=256
+):
+    """Draw fresh negative examples and construct one epoch's DataLoader."""
+
+    users = []
+    positives = []
+    negatives = []
+
+    for user_id, positive_movies in positive_by_user.items():
+
+        unseen_movies = unseen_by_user[user_id]
+
+        if len(unseen_movies) == 0:
+            continue
+
+        negative_movies = rng.choice(
+            unseen_movies,
+            size=len(positive_movies),
+            replace=True
+        )
+
+        users.extend([user_dict[user_id]] * len(positive_movies))
+        positives.extend(positive_movies)
+        negatives.extend(negative_movies)
+
+    if not users:
+        raise ValueError("No positive training interactions have an unobserved negative candidate.")
+
+    dataset = TensorDataset(
+        torch.tensor(users, dtype=torch.long),
+        torch.tensor(positives, dtype=torch.long),
+        torch.tensor(negatives, dtype=torch.long)
+    )
+
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True
+    )
 
 class NeuralCollaborativeFiltering(nn.Module):
     def __init__(self, num_users, num_movies, embedding_dim=16):
@@ -229,34 +305,33 @@ def train_ncf(model, train_loader, val_loader, epochs=10, learning_rate=0.001):
 
 import copy
 
-def train_bpr(model,bpr_loader,val_df,user_histories,user_dict,movie_dict,movie_counts,epochs=10,learning_rate=0.001,min_ratings=50):
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=learning_rate)
+def train_bpr(
+    model, epoch_loader, user_dict, val_df, user_histories, movie_dict, movie_counts,
+    epochs=10, learning_rate=0.001, min_ratings=50
+):
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     best_ndcg = -1.0
     best_epoch = 0
     best_model_state = None
 
-    #select the same validation users for every epoch
     eligible_users = sorted(
         set(val_df.loc[val_df["is_positive"] == 1, "user_id"])
         & set(user_histories))
 
-    rng = np.random.default_rng(42)
-    selected_users = rng.choice(
-        eligible_users,
-        size=min(200, len(eligible_users)),
-        replace=False)
+    val_rng = np.random.default_rng(42)
+    selected_users = val_rng.choice(eligible_users, size=min(200, len(eligible_users)), replace=False)
 
     sampled_histories = {
         user_id: user_histories[user_id]
         for user_id in selected_users}
 
     for epoch in range(epochs):
+        bpr_loader = epoch_loader()
+
         model.train()
         total_loss = 0.0
 
-        #BPR training
         for user_batch, positive_batch, negative_batch in bpr_loader:
 
             positive_scores = model(user_batch, positive_batch)
@@ -273,16 +348,15 @@ def train_bpr(model,bpr_loader,val_df,user_histories,user_dict,movie_dict,movie_
 
         average_loss = total_loss / len(bpr_loader.dataset)
 
-        #Validate ranking performance
         def bpr_recommend(user_id, user_history, k):
-            return recommend_ncf(model=model,user_id=user_id,user_dict=user_dict,movie_dict=movie_dict,user_history=user_history,
-                movie_counts=movie_counts,k=k,min_ratings=min_ratings)
+            return recommend_ncf(model=model,user_id=user_id,user_dict=user_dict,movie_dict=movie_dict,
+                user_history=user_history,
+                movie_counts=movie_counts,
+                k=k,
+                min_ratings=min_ratings)
 
-        results = evaluate_model(
-            bpr_recommend,
-            sampled_histories,
-            val_df,
-            k=10)
+        results = evaluate_model(bpr_recommend, sampled_histories, val_df, k=10)
+
         val_ndcg = results["ndcg_at_k"]
 
         if val_ndcg > best_ndcg:
@@ -297,9 +371,7 @@ def train_bpr(model,bpr_loader,val_df,user_histories,user_dict,movie_dict,movie_
 
     model.load_state_dict(best_model_state)
 
-    print(
-        f"Best checkpoint: Epoch {best_epoch} | "
-        f"NDCG@10: {best_ndcg:.4f}")
+    print(f"Best checkpoint: Epoch {best_epoch} | NDCG@10: {best_ndcg:.4f}")
 
     return model
 
@@ -340,59 +412,61 @@ def recommend_ncf(model: NeuralCollaborativeFiltering,
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=("dynamic", "fixed", "bce"), default="dynamic")
+    args = parser.parse_args()
+
     train_df = pd.read_csv(TRAIN_PATH)
     val_df = pd.read_csv(VAL_PATH)
-
-
     movie_counts = train_df.groupby("movie_id").size()
+
     train_loader, user_dict, movie_dict = prepare_ncf_data(train_df)
+    positive_by_user, unseen_by_user = prepare_bpr_sampling_data(train_df,user_dict,movie_dict)
+
     user_histories = get_user_history(train_df)
-
-    bpr_loader = prepare_bpr_data(
-        train_df,user_dict,movie_dict,batch_size=256, seed=42)
-
-    print("BPR batches:", len(bpr_loader))
-    print("BPR training triples:", len(bpr_loader.dataset))
+    min_ratings = 50
 
     torch.manual_seed(42)
 
     bpr_model = NeuralCollaborativeFiltering(
         num_users=len(user_dict),
         num_movies=len(movie_dict),
-        embedding_dim=32)
+        embedding_dim=32
+    )
 
     trained_bpr_model = train_bpr(
-    model=bpr_model,
-    bpr_loader=bpr_loader,
-    val_df=val_df,
-    user_histories=user_histories,
-    user_dict=user_dict,
-    movie_dict=movie_dict,
-    movie_counts=movie_counts,
-    epochs=10,
-    learning_rate=0.001,
-    min_ratings=50
-)
-
-    def bpr_recommend(user_id, user_history, k):
+        model=bpr_model,
+        positive_by_user=positive_by_user,
+        unseen_by_user=unseen_by_user,
+        user_dict=user_dict,
+        val_df=val_df,
+        user_histories=user_histories,
+        movie_dict=movie_dict,
+        movie_counts=movie_counts,
+        epochs=10,
+        learning_rate=0.001,
+        min_ratings=50,
+        seed=42)
+    
+    def recommend(user_id, user_history, k):
         return recommend_ncf(
-            model=trained_bpr_model,
+            model=trained_model,
             user_id=user_id,
             user_dict=user_dict,
             movie_dict=movie_dict,
             user_history=user_history,
             movie_counts=movie_counts,
             k=k,
-            min_ratings=50)
+            min_ratings=min_ratings)
 
-    bpr_results = evaluate_model(
-        bpr_recommend,
-        user_histories,
-        val_df,
-        k=10
+    results = evaluate_model(recommend, user_histories, val_df, k=10)
+    print(f"{args.mode} validation results:", results)
+
+    eligible_users = sorted(set(val_df.loc[val_df["is_positive"] == 1, "user_id"]) & user_histories.keys())
+    diagnostic_results = analyze_recommendation_popularity(
+        recommend, user_histories, train_df, eligible_users, k=10
     )
-
-    print("BPR Results:", bpr_results)
+    print(f"{args.mode} recommendation popularity:", diagnostic_results)
 
 #$env:PYTHONPATH = "src"
 #python -m neural_recommendation.neural_cf

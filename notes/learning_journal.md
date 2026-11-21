@@ -287,3 +287,25 @@ Next, I need to implement the epoch and batch loops, generate predictions, calcu
 After training works, I'll implement `recommend_movies()`, generate personalized recommendations, and evaluate matrix factorization using the same Precision@10, Recall@10, and NDCG@10 metrics as our popularity baseline.
 
 The main goal is still to determine whether learning personalized user–movie embeddings actually improves recommendation quality.
+
+# November 20, 2026 — Neural Recommender Progress
+
+I spent the past few sessions trying to figure out why my neural collaborative filtering model was doing so poorly compared to the popularity baseline. I went back through data preparation, evaluation, matrix factorization, and NCF. I feel a lot more comfortable with how user and movie IDs become embedding indices, how tensors and DataLoaders fit together, and how the forward pass uses learned vectors to make predictions.
+
+### What I Tried
+
+- **Popularity filtering.** NCF was recommending a lot of movies with hardly any training ratings. I tried minimum-rating thresholds of 0, 10, 25, and 50, and filtering improved NDCG substantially.
+- **Validation and checkpoints.** I added validation BCE and started restoring the epoch with the lowest validation loss.
+- **Embedding size.** I compared 8, 16, 32, and 64 dimensions. Larger embeddings generally ranked movies better, although 64 dimensions showed much more overfitting.
+- **Training objective.** I realized BCE was learning whether a movie someone had already rated got a positive rating. What I actually want at recommendation time is a ranking of movies the user hasn't rated.
+- **BPR.** I implemented negative sampling and a pairwise ranking loss so the model learns to score a known positive movie above a sampled unobserved movie.
+
+### What Happened With BPR
+
+The initial BPR model reached **NDCG@10 = 0.0682**, compared with about **0.0201** for the 32-dimensional BCE model. After adding validation-based checkpoint selection, full validation NDCG@10 reached **0.0726** across 5,933 users. The popularity baseline is still a little ahead at **0.0759**.
+
+Epoch 6 was the best checkpoint. Training loss kept going down after that, but validation NDCG dropped. The biggest thing I want to remember is how much the training objective matters. Switching from classification to pairwise ranking made a bigger difference than increasing the embedding size.
+
+### Next Steps
+
+I want to try drawing fresh negatives every epoch, then run multiple random seeds and standardize the model comparisons. After that, I want to build a Tableau dashboard and a small recommendation app. I'm also thinking about how to present this as a complete ML workflow with a clear story connecting data preparation, training, and evaluation.
