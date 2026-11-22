@@ -12,6 +12,8 @@ I built four recommenders, tested different ways to train the neural model, and 
 
 ## Key results
 
+**[Explore the interactive model evaluation dashboard on Tableau Public](https://public.tableau.com/app/profile/lucas.lu7590/viz/NeuralNetworkModelEvaluation/Dashboard2).**
+
 **Held-out test results** across 5,930 users. Every model recommended 10 unique movies from a shared catalog of titles with at least 50 training ratings. [Download the full-precision test results](results/metrics/final_model_comparison.csv).
 
 | Model | Precision@10 | Recall@10 | NDCG@10 |
@@ -21,7 +23,7 @@ I built four recommenders, tested different ways to train the neural model, and 
 | Neural CF + BCE | 0.0190 | 0.0134 | 0.0192 |
 | Neural CF + Dynamic BPR | 0.0622 | 0.0452 | 0.0720 |
 
-Switching the neural training objective from binary cross-entropy (BCE) to Bayesian Personalized Ranking (BPR) corresponded to about **275% higher test NDCG@10**. Dynamic BPR also scored about 55% higher than Matrix Factorization on NDCG@10. Popularity finished about 0.0027 ahead of Dynamic BPR, a small absolute advantage for a model that requires only counting ratings. These offline scores measure how well the models recover highly rated held-out movies and place them near the top. User satisfaction would require separate evidence.
+Neural CF + Dynamic BPR achieved a test NDCG@10 of **0.0720**, about **275% higher** than the binary cross-entropy (BCE) model's **0.0192** and about 55% higher than Matrix Factorization. Popularity remained the strongest overall model at **0.0747**. These offline scores measure how well the models recover highly rated held-out movies and place them near the top. User satisfaction would require separate evidence.
 
 ## Contents
 
@@ -83,9 +85,17 @@ The BPR trainer uses a seeded sample of 200 eligible validation users, keeps tha
 
 ## Training history and visualizations
 
-An earlier dynamic BPR run is recorded in the local `results/metrics/epoch_results.csv`. Training loss declined from 0.3909 to 0.2599, and its validation-subset NDCG@10 peaked at 0.0844 in epoch 9. The available records establish separate validation histories. The cause of the different checkpoint choices is undocumented.
+The dashboard contains five views. [Model evaluation dashboard on Tableau Public](https://public.tableau.com/app/profile/lucas.lu7590/viz/NeuralNetworkModelEvaluation/Dashboard2)
 
-The [exploratory analysis script](notebooks/eda.py) contains chart code for ratings and interaction counts by user and movie. The final comparison table and [results CSV](results/metrics/final_model_comparison.csv) provide the performance evidence for this project.
+- **Model NDCG@10 Comparison** compares all four models on the primary held-out test metric.
+- **All Model Metrics** shows test Precision@10, Recall@10, and NDCG@10 for each model.
+- **Performance Heatmap** uses color to make differences across models and test metrics easier to scan.
+- **Validation NDCG@10 by Epoch** shows how ranking quality fluctuated over the historical BPR run.
+- **Training BPR Loss by Epoch** shows how the training objective decreased over that same run.
+
+Both epoch charts use an earlier dynamic BPR run recorded in the local `results/metrics/epoch_results.csv`. Training loss decreased each epoch, from 0.3909 to 0.2599, while validation NDCG@10 fluctuated and peaked at 0.0844 in epoch 9. The falling loss did not guarantee better rankings, which is why checkpoint selection used validation NDCG@10. The separate final evaluation selected epoch 7 at 0.0832 on its validation subset and achieved 0.0720 on the held-out test set.
+
+For the underlying test scores and exploratory charts, see the [results CSV](results/metrics/final_model_comparison.csv) and [exploratory analysis script](notebooks/eda.py).
 
 ## Evaluation methodology
 

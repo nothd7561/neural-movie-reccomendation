@@ -106,6 +106,7 @@ The result I value most is twofold. Switching to pairwise training made the neur
 
 ## Explore the project
 
+- [Interactive model results and training charts on Tableau Public](https://public.tableau.com/app/profile/lucas.lu7590/viz/NeuralNetworkModelEvaluation/Dashboard2)
 - [Technical overview and reproduction steps](../README.md)
 - [Popularity](../src/neural_recommendation/popularity.py), [Matrix Factorization](../src/neural_recommendation/matrix_factorization.py), and [Neural CF](../src/neural_recommendation/neural_cf.py)
 - [Evaluation pipeline](../src/neural_recommendation/evaluation.py) and [full-precision test results](../results/metrics/final_model_comparison.csv)
