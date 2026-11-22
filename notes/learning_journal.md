@@ -309,3 +309,32 @@ Epoch 6 was the best checkpoint. Training loss kept going down after that, but v
 ### Next Steps
 
 I want to try drawing fresh negatives every epoch, then run multiple random seeds and standardize the model comparisons. After that, I want to build a Tableau dashboard and a small recommendation app. I'm also thinking about how to present this as a complete ML workflow with a clear story connecting data preparation, training, and evaluation.
+
+# November 22, 2026 — Final Recommender Results and Tableau
+
+I finished testing dynamic negative sampling and ran the final model comparison. With fixed sampling, BPR sees the same pairs of liked and unrated movies each epoch. With dynamic sampling, I draw the unrated side of each pair again at the start of the epoch. That gives the model more comparisons to learn from, and it can still draw the same movie twice. An unrated movie is just something the user hadn't rated in training.
+
+### Keeping the BPR Runs Straight
+
+- **Earlier BPR run (November 20).** I recorded epoch 6 as the best checkpoint and **0.0726 NDCG@10** on the full validation group of **5,933 users**. The journal preserves that result. I don't have an epoch log here to independently check that checkpoint.
+- **Historical dynamic BPR run (Tableau).** The saved history peaks at **epoch 9**, with **0.0844 NDCG@10 on the validation subset**. Training loss fell every epoch, from 0.3909 to 0.2599, while validation ranking went up and down.
+- **Final comparison run.** The run output reported **epoch 7** as the best checkpoint, with **0.0832 NDCG@10** on its fixed group of **200 validation users**. After restoring that checkpoint, dynamic BPR scored **0.0720 NDCG@10** on the held-out test set.
+
+I don't know why the two dynamic runs peaked at different epochs. A higher score on a validation subset and a lower score across all eligible validation or test users can reflect differences in who's included, which ratings are held out, and which movies each model can recommend. I can use the validation score to pick a checkpoint within a run. For the head-to-head comparison, I want the scores from the same test users under the same rules.
+
+### What Happened on the Test Set
+
+I kept the chronological split and used validation to choose the neural checkpoints before opening the test file. All four models ranked movies for the same **5,930 test users** and returned 10 unique recommendations per user. I required at least **50 training ratings** per candidate movie and left out anything the user had rated in training or validation. Matrix factorization used its final epoch, and popularity used counts of positive training ratings.
+
+| Model | Precision@10 | Recall@10 | NDCG@10 |
+|---|---:|---:|---:|
+| Popularity | 0.0637 | 0.0468 | 0.0747 |
+| Matrix Factorization | 0.0390 | 0.0291 | 0.0464 |
+| Neural CF + BCE | 0.0190 | 0.0134 | 0.0192 |
+| Neural CF + Dynamic BPR | 0.0622 | 0.0452 | 0.0720 |
+
+BPR beat matrix factorization and scored about 275% higher than BCE on test NDCG@10. Popularity still came out ahead. I was glad to see that changing the training task made the neural model competitive, and the simple baseline gave me a clear way to judge how far it got. [Full test results](../results/metrics/final_model_comparison.csv)
+
+### Putting It Together in Tableau
+
+I published the dashboard with three views of the final test metrics and two charts from the historical dynamic BPR run. Putting training loss next to validation NDCG made it easier to see why I picked a checkpoint based on ranking quality. The two epoch charts show the run that peaked at epoch 9. The test comparison shows scores from the separate run that restored epoch 7. [Tableau dashboard](https://public.tableau.com/app/profile/lucas.lu7590/viz/NeuralNetworkModelEvaluation/Dashboard2)
