@@ -1,0 +1,5 @@
+model,users_evaluated,precision_at_k,recall_at_k,ndcg_at_k,checkpoint_rule,min_training_ratings
+Popularity,5930,0.06369308600337267,0.04680562714577273,0.07470228536689544,Training positive-rating counts,50
+Matrix factorization,5930,0.03903878583473862,0.02911970453717483,0.046402175237266335,Final epoch,50
+NCF + BCE,5930,0.019021922428330524,0.013369439230600624,0.01921122584189927,Lowest validation BCE loss,50
+NCF + dynamic BPR,5930,0.06222596964586847,0.045226593606716395,0.07197005251820782,Highest validation NDCG@10 on 200 users,50

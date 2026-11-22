@@ -26,6 +26,7 @@ data/**
 results/**
 !results/**/
 !results/**/.gitkeep
+!/results/metrics/final_model_comparison.csv
 
 # Editor and operating system files
 .vscode/

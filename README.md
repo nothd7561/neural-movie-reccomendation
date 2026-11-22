@@ -8,9 +8,11 @@ I built four recommenders, tested different ways to train the neural model, and 
 |---|---:|---|---|---|
 | MovieLens 1M | 4 | NDCG@10 | Neural CF + Dynamic BPR (0.0720) | Popularity (0.0747) |
 
+[Final test results](#key-results) | [Nontechnical overview](#how-recommendations-work) | [Model implementations](#modeling-approaches) | [Reproduce the experiment](#how-to-run)
+
 ## Key results
 
-**Held-out test results** across 5,930 users. Every model recommended 10 unique movies from a shared catalog of titles with at least 50 training ratings.
+**Held-out test results** across 5,930 users. Every model recommended 10 unique movies from a shared catalog of titles with at least 50 training ratings. [Download the full-precision test results](results/metrics/final_model_comparison.csv).
 
 | Model | Precision@10 | Recall@10 | NDCG@10 |
 |---|---:|---:|---:|
@@ -77,13 +79,13 @@ Uses the same network architecture and learns pairwise preferences. The loss pen
 
 BCE learns to classify ratings on movies users already chose to rate. BPR learns a relative ordering, which more closely matches the task of ranking unseen movies. I also compared **fixed sampling**, which reuses the same pairs, with **dynamic sampling**, which draws new comparisons each epoch. Both preparation paths are in the code. Dynamic BPR is the variant used in the final four-model comparison.
 
-The BPR trainer uses a seeded sample of 200 eligible validation users, keeps that cohort fixed, and restores the weights from the epoch with the highest validation NDCG@10. Training loss can keep falling after validation ranking peaks, so checkpoint selection uses the ranking metric. The final-test run selected epoch 7 with subset validation NDCG@10 of 0.0832. It then scored 0.0720 on the separate test cohort. The learning journal records earlier validation experiments with embedding sizes, rating cutoffs, and the fixed-negative BPR run. [Learning journal](notes/learning_journal.md)
+The BPR trainer uses a seeded sample of 200 eligible validation users, keeps that cohort fixed, and restores the weights from the epoch with the highest validation NDCG@10. Training loss can keep falling after validation ranking peaks, so checkpoint selection uses the ranking metric. The final comparison run selected epoch 7 at 0.0832 NDCG@10 on the validation subset. That checkpoint scored 0.0720 NDCG@10 on the held-out test cohort. The learning journal records earlier validation experiments with embedding sizes, rating cutoffs, and the fixed-negative BPR run. [Learning journal](notes/learning_journal.md)
 
 ## Training history and visualizations
 
-The local `results/metrics/epoch_results.csv` records training loss and validation NDCG@10 for a separate set of logged epoch values. In that file, training loss declines from 0.3909 to 0.2599 and the highest validation NDCG@10 is 0.0844 at epoch 9. Those values describe that history file. The final-test run logged a different validation series and selected epoch 7.
+An earlier dynamic BPR run is recorded in the local `results/metrics/epoch_results.csv`. Training loss declined from 0.3909 to 0.2599, and its validation-subset NDCG@10 peaked at 0.0844 in epoch 9. The available records establish separate validation histories. The cause of the different checkpoint choices is undocumented.
 
-The [exploratory analysis script](notebooks/eda.py) contains chart code for ratings and interaction counts by user and movie. The repository has no committed figure assets. The local metrics CSVs are ignored by Git, and the final-test command regenerates the comparison CSV.
+The [exploratory analysis script](notebooks/eda.py) contains chart code for ratings and interaction counts by user and movie. The final comparison table and [results CSV](results/metrics/final_model_comparison.csv) provide the performance evidence for this project.
 
 ## Evaluation methodology
 
@@ -117,7 +119,7 @@ NDCG@10 gives more weight to early hits and normalizes by the user's ideal ranki
 |-- results/
 |   |-- checkpoints/
 |   |-- figures/
-|   `-- metrics/               # Local evaluation exports and epoch history
+|   `-- metrics/               # Final test snapshot and local experiment logs
 |-- src/neural_recommendation/
 |   |-- data_loader.py
 |   |-- preprocessing.py
@@ -136,7 +138,7 @@ NDCG@10 gives more weight to early hits and normalizes by the user's ideal ranki
 | Model implementations | [popularity.py](src/neural_recommendation/popularity.py), [matrix_factorization.py](src/neural_recommendation/matrix_factorization.py), [neural_cf.py](src/neural_recommendation/neural_cf.py) |
 | Ranking metrics and final test runner | [evaluation.py](src/neural_recommendation/evaluation.py) |
 | How popular the recommendations are in training | [popularity_diagnostic.py](src/neural_recommendation/popularity_diagnostic.py) |
-| Final scores and experiment history | Local `results/metrics/final_model_comparison.csv`, local `results/metrics/epoch_results.csv`, and the [learning journal](notes/learning_journal.md) |
+| Final scores and experiment history | [Final test results CSV](results/metrics/final_model_comparison.csv), local `results/metrics/epoch_results.csv`, and the [learning journal](notes/learning_journal.md) |
 
 ## How to run
 
@@ -166,7 +168,7 @@ Run the full comparison:
 python -m neural_recommendation.evaluation --final-test
 ```
 
-This command rebuilds the Popularity baseline, trains the other three models, and writes `results/metrics/final_model_comparison.csv`. The runner uses seed 42 and deterministic PyTorch on a single CPU thread. It selects weights during the run and keeps them in memory. The CSV export is local, and model checkpoints are not bundled.
+This command rebuilds the Popularity baseline, trains the other three models, and writes `results/metrics/final_model_comparison.csv`. The runner uses seed 42 and deterministic PyTorch on a single CPU thread. It selects weights during the run and keeps them in memory. Rerunning the command refreshes the results snapshot at that path.
 
 For standalone validation runs:
 
