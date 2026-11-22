@@ -8,7 +8,7 @@ I built four recommenders, tested different ways to train the neural model, and 
 |---|---:|---|---|---|
 | MovieLens 1M | 4 | NDCG@10 | Neural CF + Dynamic BPR (0.0720) | Popularity (0.0747) |
 
-[Final test results](#key-results) | [Nontechnical overview](#how-recommendations-work) | [Model implementations](#modeling-approaches) | [Reproduce the experiment](#how-to-run)
+[Final test results](#key-results) | [Nontechnical project guide](docs/nontechnical_guide.md) | [Model implementations](#modeling-approaches) | [Reproduce the experiment](#how-to-run)
 
 ## Key results
 
@@ -134,6 +134,7 @@ NDCG@10 gives more weight to early hits and normalizes by the user's ideal ranki
 
 | To explore | Start here |
 |---|---|
+| Project story and results in plain language | [Nontechnical guide](docs/nontechnical_guide.md) |
 | Data ingestion and chronological splits | [data_loader.py](src/neural_recommendation/data_loader.py), [preprocessing.py](src/neural_recommendation/preprocessing.py) |
 | Model implementations | [popularity.py](src/neural_recommendation/popularity.py), [matrix_factorization.py](src/neural_recommendation/matrix_factorization.py), [neural_cf.py](src/neural_recommendation/neural_cf.py) |
 | Ranking metrics and final test runner | [evaluation.py](src/neural_recommendation/evaluation.py) |
